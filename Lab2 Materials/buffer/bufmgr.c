@@ -1615,6 +1615,11 @@ PinBuffer(BufferDesc *buf, BufferAccessStrategy strategy)
 											   buf_state))
 			{
 				result = (buf_state & BM_VALID) != 0;
+				/*
+				*CSCI5708 (Jason Nowotny)
+				*in this condition remove the buffer from the queue
+				*/
+				removefromMRUQueue(buf);
 				break;
 			}
 		}
@@ -1678,6 +1683,11 @@ PinBuffer_Locked(BufferDesc *buf)
 
 	ref = NewPrivateRefCountEntry(b);
 	ref->refcount++;
+	/*
+	*CSCI5708 (Jason Nowotny)
+	*in this condition remove the buffer from the queue
+	*/
+	removefromMRUQueue(buf);
 
 	ResourceOwnerRememberBuffer(CurrentResourceOwner, b);
 }
@@ -1707,6 +1717,11 @@ UnpinBuffer(BufferDesc *buf, bool fixOwner)
 	ref->refcount--;
 	if (ref->refcount == 0)
 	{
+		/*
+		*CSCI5708 (Jason Nowotny)
+		*in this condition add the buffer to the queue
+		*/
+		addtoMRUQueue(buf);
 		uint32		buf_state;
 		uint32		old_buf_state;
 

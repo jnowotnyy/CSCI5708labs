@@ -22,8 +22,8 @@
 
 #define INT_ACCESS_ONCE(var)	((int)(*((volatile int *)&(var))))
 
-#define PREVIOUS_HEAD -1
-#define NEXT_TAIL -1
+#define MRU_HEAD -1
+#define MRU_TAIL -1
 #define MRU_NOT_FOUND -2
 
 int MOST_RECENT_BUF  = BufferAccessStrategyData -> current;
@@ -47,8 +47,8 @@ typedef struct
 	int			firstFreeBuffer;	/* Head of list of unused buffers */
 	int			lastFreeBuffer; /* Tail of list of unused buffers */
 	
-	int			MRUlisthead;
-	int			MRUlisttail;
+	int			MRUhead;
+	int			MRUtail;
 	/*
 	 * NOTE: lastFreeBuffer is undefined when firstFreeBuffer is -1 (that is,
 	 * when the list is empty)
@@ -119,76 +119,25 @@ static void AddBufferToRing(BufferAccessStrategy strategy,
  */
 
 
-//makes a singly linked list with the MOST RECENT BUFFER utilized at the head
-void addtoMRUQueue(volatile BufferDesc *buffer){
-	//sanity check if its in the list do not add it again
-	if(buffer -> MRUNext != MRU_NOT_FOUND){
-		return;
-	}
-	
-	//link to previous
-	buffer -> MRUPreviousHead = PREVIOUS_HEAD;
-	
-	//link to next
-	buffer -> MRUNextTail = StrategyControl -> MRUlisthead;
-	StrategyControl -> MRUlisthead = buffer -> buf_id;
-	if(buffer -> MRUNextTail != NEXT_TAIL){
-		Assert((BufferDescriptors + buffer -> MRUNextTail) -> MRUPreviousHead == PREVIOUS_HEAD); //sets the pointer to the previous head
-		(BufferDescriptors + buffer -> MRUNextTail) -> MRUPreviousHead = buffer -> buf_id; // makes the previous head equal to the id of the current buffer
-	}
-}
-
-void removefromMRUQueue(volatile BufferDesc *buffer){
-	//sanity check if its not in the list return
-	if(buffer -> MRUNextTail == MRU_NOT_FOUND){
-		return;
-	}
-	
-	Assert(StrategyControl -> MRUlisthead != NEXT_TAIL);
-	
-	//unlink from previous
-	if(buffer -> MRUPreviousHead == PREVIOUS_HEAD){
-		StrategyControl -> MRUlisthead = buffer -> MRUNextTail;
-	} else {
-		(BufferDescriptors + buffer -> MRUPreviousHead) -> MRUNextTail = buffer -> MRUNextTail;
-	}
-	
-	//unlink from next
-	if(buffer -> MRUNextTail == NEXT_TAIL){
-		StrategyControl -> MRUlisttail = buffer -> MRUPreviousHead;
-	} else {
-		(BufferDescriptors + buffer -> MRUNextTail) -> MRUPreviousHead = buffer -> MRUPreviousHead;
-	}
-	
-	//reset MRU vals
-	buffer -> MRUNextTail = MRU_NOT_FOUND;
-	buffer -> MRUPreviousHead = MRU_NOT_FOUND;
-}
-
-static inline uint32
-MRU(void){
-	
-}
-
-static inline uint32
-ClockSweepTick(void)
-{
-	uint32		victim;
+//static inline uint32
+//ClockSweepTick(void)
+//{
+//	uint32		victim;
 
 	/*
 	 * Atomically move hand ahead one buffer - if there's several processes
 	 * doing this, this can lead to buffers being returned slightly out of
 	 * apparent order.
 	 */
-	victim =
-		pg_atomic_fetch_add_u32(&StrategyControl->nextVictimBuffer, 1);
+//	victim =
+//		pg_atomic_fetch_add_u32(&StrategyControl->nextVictimBuffer, 1);
 
-	if (victim >= NBuffers)
-	{
-		uint32		originalVictim = victim;
+//	if (victim >= NBuffers)
+//	{
+//		uint32		originalVictim = victim;
 
 		/* always wrap what we look up in BufferDescriptors */
-		victim = victim % NBuffers;
+//		victim = victim % NBuffers;
 
 		/*
 		 * If we're the one that just caused a wraparound, force
@@ -196,39 +145,95 @@ ClockSweepTick(void)
 		 * need the spinlock so StrategySyncStart() can return a consistent
 		 * value consisting of nextVictimBuffer and completePasses.
 		 */
-		if (victim == 0)
-		{
-			uint32		expected;
-			uint32		wrapped;
-			bool		success = false;
+//		if (victim == 0)
+//		{
+//			uint32		expected;
+//			uint32		wrapped;
+//			bool		success = false;
 
-			expected = originalVictim + 1;
+//			expected = originalVictim + 1;
 
-			while (!success)
-			{
-				/*
-				 * Acquire the spinlock while increasing completePasses. That
-				 * allows other readers to read nextVictimBuffer and
-				 * completePasses in a consistent manner which is required for
-				 * StrategySyncStart().  In theory delaying the increment
-				 * could lead to an overflow of nextVictimBuffers, but that's
-				 * highly unlikely and wouldn't be particularly harmful.
+//			while (!success)
+//			{
+//				/*
+//				 * Acquire the spinlock while increasing completePasses. That
+//				 * allows other readers to read nextVictimBuffer and
+//				 * completePasses in a consistent manner which is required for
+//				 * StrategySyncStart().  In theory delaying the increment
+//				 * could lead to an overflow of nextVictimBuffers, but that's
+//				 * highly unlikely and wouldn't be particularly harmful.
 				 */
-				SpinLockAcquire(&StrategyControl->buffer_strategy_lock);
+//				SpinLockAcquire(&StrategyControl->buffer_strategy_lock);
 
-				wrapped = expected % NBuffers;
+//				wrapped = expected % NBuffers;
 
-				success = pg_atomic_compare_exchange_u32(&StrategyControl->nextVictimBuffer,
+//				success = pg_atomic_compare_exchange_u32(&StrategyControl->nextVictimBuffer,
 														 &expected, wrapped);
-				if (success)
-					StrategyControl->completePasses++;
-				SpinLockRelease(&StrategyControl->buffer_strategy_lock);
-			}
-		}
+//				if (success)
+//					StrategyControl->completePasses++;
+//				SpinLockRelease(&StrategyControl->buffer_strategy_lock);
+//			}
+//		}
+//	}
+//	return victim;
+//}
+
+
+/* CSCI 5708 (Jason Nowotny)
+* This function will put a buffer pointer into MRU queue, It should be called when
+* a buffer is unpinned. The buffer will be put at head position of the linked list since
+* it is MRU. 
+* BufferDescriptors[StrategyControl->MRUtail] is the address of the linked list
+* StrategyControl->MRUhead and StrategyControl->MRUtail records the front and rear of the linked list 
+*/
+void addtoMRUQueue(volatile BufferDesc *buffer){
+	//sanity check if its in the list do not add it again
+	if(buffer -> MRUNext == MRU_NOT_FOUND){
+		return;
 	}
-	return victim;
+	
+	//link to next
+	BufferDescriptors[StrategyControl->MRUtail].MRUNext = buffer -> buf_id;
+	
+	//link to previous
+	if(BufferDescriptors[StrategyControl->MRUhead].MRUPrevious == MRU_NOT_FOUND){
+		BufferDescriptors[StrategyControl->MRUhead].MRUPrevious = MRU_HEAD;
+	} else {
+		buffer -> MRUPrevious = StrategyControl -> MRUtail;
+	}
+	
+	StrategyControl -> MRUtail = buffer-> buf_id;
+	buffer -> MRUNext = MRU_TAIL;
 }
 
+/* CSCI 5708 (Jason Nowotny)
+* This function will remove a buffer pointer from the MRU linked list if it exists in the queue. 
+* It should be called when a buffer is pinned.
+*/
+
+void removefromMRUQueue(volatile BufferDesc *buffer){
+	//sanity check if its not in the list return
+	if(buffer -> MRUNext == MRU_NOT_FOUND){
+		return;
+	}
+	
+	//unlink from next
+	if(buffer -> MRUNext == MRU_TAIL){
+		StrategyControl -> MRUtail = buffer -> MRUPrevious;
+	} else {
+		BufferDescriptors[StrategyControl -> MRUhead].MRUPrevious = buffer -> MRUPrevious;
+	}
+	
+	//unlink from previous
+	if (buffer -> MRUPrevious == MRU_HEAD) {
+        StrategyControl -> MRUhead = buffer -> MRUNext;
+	} else {
+    		BufferDescriptors[buffer -> MRUtail].MRUNext = buffer -> MRUNext;
+	}
+	
+	buffer -> MRUNext = MRU_NOT_FOUND;
+	buffer -> MRUPrevious = MRU_NOT_FOUND;
+}
 
 /*
  * StrategyGetBuffer
@@ -361,7 +366,20 @@ StrategyGetBuffer(BufferAccessStrategy strategy, uint32 *buf_state)
 	trycounter = NBuffers;
 	for (;;)
 	{
-		buf = GetBufferDescriptor(ClockSweepTick());
+		/* CSCI 5708 (Jason Nowotny)
+		* when chosing victim, just look the head of the linked list
+		* This is most recent used one. Strategy == NULL is the normal case
+		*/
+		if(strategy == NULL){
+			buf = &BufferDescriptors[StrategyControl -> MRUhead];
+		} else {
+			buf = &BufferDescriptors[StrategyControl -> nextVictimBuffer];
+		}
+		// handles boundary case where buffer is equal to NBuffers
+		if(++StrategyControl -> nextVictimBuffer >= NBuffers){
+			StrategyControl -> nextVictimBuffer = 0;
+			StrategyControl -> completePasses++;
+		}
 
 		/*
 		 * If the buffer is pinned or has a nonzero usage_count, we cannot use
@@ -371,14 +389,17 @@ StrategyGetBuffer(BufferAccessStrategy strategy, uint32 *buf_state)
 
 		if (BUF_STATE_GET_REFCOUNT(local_buf_state) == 0)
 		{
-			if (BUF_STATE_GET_USAGECOUNT(local_buf_state) != 0)
-			{
+			/*
+			* CSCI 5708 (Jason Nowotny)
+			* Added the condition where strategy is null (Sanity Check)
+			*/
+			if (strategy == NULL){
+				return buf;
+			} else if (BUF_STATE_GET_USAGECOUNT(local_buf_state) != 0){
 				local_buf_state -= BUF_USAGECOUNT_ONE;
 
 				trycounter = NBuffers;
-			}
-			else
-			{
+			} else {
 				/* Found a usable buffer */
 				if (strategy != NULL)
 					AddBufferToRing(strategy, buf);
@@ -395,6 +416,12 @@ StrategyGetBuffer(BufferAccessStrategy strategy, uint32 *buf_state)
 			 * probably better to fail than to risk getting stuck in an
 			 * infinite loop.
 			 */
+			 
+			 /*
+			* CSCI 5708 (Jason Nowotny)
+			* If the buffer is unpinned unlink the buffer
+			*/
+			removefromMRUQueue(buf);
 			UnlockBufHdr(buf, local_buf_state);
 			elog(ERROR, "no unpinned buffers available");
 		}
