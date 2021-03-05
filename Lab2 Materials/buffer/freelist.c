@@ -26,8 +26,6 @@
 #define MRU_TAIL -1
 #define MRU_NOT_FOUND -2
 
-int MOST_RECENT_BUF  = BufferAccessStrategyData -> current;
-
 
 /*
  * The shared freelist control information.
@@ -162,13 +160,13 @@ static void AddBufferToRing(BufferAccessStrategy strategy,
 //				 * StrategySyncStart().  In theory delaying the increment
 //				 * could lead to an overflow of nextVictimBuffers, but that's
 //				 * highly unlikely and wouldn't be particularly harmful.
-				 */
+//				 */
 //				SpinLockAcquire(&StrategyControl->buffer_strategy_lock);
 
 //				wrapped = expected % NBuffers;
 
 //				success = pg_atomic_compare_exchange_u32(&StrategyControl->nextVictimBuffer,
-														 &expected, wrapped);
+//														 &expected, wrapped);
 //				if (success)
 //					StrategyControl->completePasses++;
 //				SpinLockRelease(&StrategyControl->buffer_strategy_lock);
@@ -193,11 +191,11 @@ void addtoMRUQueue(volatile BufferDesc *buffer){
 	}
 	
 	//link to next
-	BufferDescriptors[StrategyControl->MRUtail].MRUNext = buffer -> buf_id;
+	BufferDescriptors[StrategyControl->MRUtail].bufferdesc.MRUNext = buffer -> buf_id;
 	
 	//link to previous
-	if(BufferDescriptors[StrategyControl->MRUhead].MRUPrevious == MRU_NOT_FOUND){
-		BufferDescriptors[StrategyControl->MRUhead].MRUPrevious = MRU_HEAD;
+	if(BufferDescriptors[StrategyControl->MRUhead].bufferdesc.MRUPrevious == MRU_NOT_FOUND){
+		BufferDescriptors[StrategyControl->MRUhead].bufferdesc.MRUPrevious = MRU_HEAD;
 	} else {
 		buffer -> MRUPrevious = StrategyControl -> MRUtail;
 	}
@@ -221,14 +219,14 @@ void removefromMRUQueue(volatile BufferDesc *buffer){
 	if(buffer -> MRUNext == MRU_TAIL){
 		StrategyControl -> MRUtail = buffer -> MRUPrevious;
 	} else {
-		BufferDescriptors[StrategyControl -> MRUhead].MRUPrevious = buffer -> MRUPrevious;
+		BufferDescriptors[buffer -> MRUNext].bufferdesc.MRUPrevious = buffer -> MRUPrevious;
 	}
 	
 	//unlink from previous
 	if (buffer -> MRUPrevious == MRU_HEAD) {
         StrategyControl -> MRUhead = buffer -> MRUNext;
 	} else {
-    		BufferDescriptors[buffer -> MRUtail].MRUNext = buffer -> MRUNext;
+    		BufferDescriptors[buffer -> MRUPrevious].bufferdesc.MRUNext = buffer -> MRUNext;
 	}
 	
 	buffer -> MRUNext = MRU_NOT_FOUND;

@@ -182,6 +182,10 @@ static void ForgetPrivateRefCountEntry(PrivateRefCountEntry *ref);
  * entry. This has to be called before using NewPrivateRefCountEntry() to fill
  * a new entry - but it's perfectly fine to not use a reserved entry.
  */
+ 
+static void addtoMRUQueue(volatile BufferDesc *buffer);
+static void removefromMRUQueue(volatile BufferDesc *buffer);
+ 
 static void
 ReservePrivateRefCountEntry(void)
 {
@@ -1717,13 +1721,13 @@ UnpinBuffer(BufferDesc *buf, bool fixOwner)
 	ref->refcount--;
 	if (ref->refcount == 0)
 	{
+		uint32		buf_state;
+		uint32		old_buf_state;
 		/*
 		*CSCI5708 (Jason Nowotny)
 		*in this condition add the buffer to the queue
 		*/
 		addtoMRUQueue(buf);
-		uint32		buf_state;
-		uint32		old_buf_state;
 
 		/* I'd better not still hold any locks on the buffer */
 		Assert(!LWLockHeldByMe(BufferDescriptorGetContentLock(buf)));
