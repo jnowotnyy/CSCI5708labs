@@ -16,7 +16,7 @@
 
 #include "storage/bufmgr.h"
 #include "storage/buf_internals.h"
-
+#include "MRU_NOT_FOUND"
 
 BufferDescPadded *BufferDescriptors;
 char	   *BufferBlocks;
@@ -138,8 +138,8 @@ InitBufferPool(void)
 
 			buf->buf_id = i;
 			//make the previous buffer and next buffer equal to not found
-			buf->MRUPreviousHead = MRU_NOT_FOUND;
-			buf->MRUNextTail = MRU_NOT_FOUND;
+			buf->MRUPrevious = MRU_NOT_FOUND;
+			buf->MRUNext = MRU_NOT_FOUND;
 
 			/*
 			 * Initially link all the buffers together as unused. Subsequent
