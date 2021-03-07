@@ -183,8 +183,8 @@ static void ForgetPrivateRefCountEntry(PrivateRefCountEntry *ref);
  * a new entry - but it's perfectly fine to not use a reserved entry.
  */
  
-static void addtoMRUQueue(volatile BufferDesc *buffer);
-static void removefromMRUQueue(volatile BufferDesc *buffer);
+void addtoMRUQueue(volatile BufferDesc *buffer);
+void removefromMRUQueue(volatile BufferDesc *buffer);
  
 static void
 ReservePrivateRefCountEntry(void)

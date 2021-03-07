@@ -27,47 +27,6 @@
 #define MRU_NOT_FOUND -2
 
 
-/*
- * The shared freelist control information.
- */
-typedef struct
-{
-	/* Spinlock: protects the values below */
-	slock_t		buffer_strategy_lock;
-
-	/*
-	 * Clock sweep hand: index of next buffer to consider grabbing. Note that
-	 * this isn't a concrete buffer - we only ever increase the value. So, to
-	 * get an actual buffer, it needs to be used modulo NBuffers.
-	 */
-	pg_atomic_uint32 nextVictimBuffer;
-
-	int			firstFreeBuffer;	/* Head of list of unused buffers */
-	int			lastFreeBuffer; /* Tail of list of unused buffers */
-	
-	int			MRUhead;
-	int			MRUtail;
-	/*
-	 * NOTE: lastFreeBuffer is undefined when firstFreeBuffer is -1 (that is,
-	 * when the list is empty)
-	 */
-
-	/*
-	 * Statistics.  These counters should be wide enough that they can't
-	 * overflow during a single bgwriter cycle.
-	 */
-	uint32		completePasses; /* Complete cycles of the clock sweep */
-	pg_atomic_uint32 numBufferAllocs;	/* Buffers allocated since last reset */
-
-	/*
-	 * Bgworker process to be notified upon activity or -1 if none. See
-	 * StrategyNotifyBgWriter.
-	 */
-	int			bgwprocno;
-} BufferStrategyControl;
-
-/* Pointers to shared state */
-static BufferStrategyControl *StrategyControl = NULL;
 
 /*
  * Private (non-shared) state for managing a ring of shared buffers to re-use.
@@ -184,54 +143,8 @@ static void AddBufferToRing(BufferAccessStrategy strategy,
 * BufferDescriptors[StrategyControl->MRUtail] is the address of the linked list
 * StrategyControl->MRUhead and StrategyControl->MRUtail records the front and rear of the linked list 
 */
-void addtoMRUQueue(volatile BufferDesc *buffer){
-	//sanity check if its in the list do not add it again
-	if(buffer -> MRUNext == MRU_NOT_FOUND){
-		return;
-	}
-	
-	//link to next
-	BufferDescriptors[StrategyControl->MRUtail].bufferdesc.MRUNext = buffer -> buf_id;
-	
-	//link to previous
-	if(BufferDescriptors[StrategyControl->MRUhead].bufferdesc.MRUPrevious == MRU_NOT_FOUND){
-		BufferDescriptors[StrategyControl->MRUhead].bufferdesc.MRUPrevious = MRU_HEAD;
-	} else {
-		buffer -> MRUPrevious = StrategyControl -> MRUtail;
-	}
-	
-	StrategyControl -> MRUtail = buffer-> buf_id;
-	buffer -> MRUNext = MRU_TAIL;
-}
-
-/* CSCI 5708 (Jason Nowotny)
-* This function will remove a buffer pointer from the MRU linked list if it exists in the queue. 
-* It should be called when a buffer is pinned.
-*/
-
-void removefromMRUQueue(volatile BufferDesc *buffer){
-	//sanity check if its not in the list return
-	if(buffer -> MRUNext == MRU_NOT_FOUND){
-		return;
-	}
-	
-	//unlink from next
-	if(buffer -> MRUNext == MRU_TAIL){
-		StrategyControl -> MRUtail = buffer -> MRUPrevious;
-	} else {
-		BufferDescriptors[buffer -> MRUNext].bufferdesc.MRUPrevious = buffer -> MRUPrevious;
-	}
-	
-	//unlink from previous
-	if (buffer -> MRUPrevious == MRU_HEAD) {
-        StrategyControl -> MRUhead = buffer -> MRUNext;
-	} else {
-    		BufferDescriptors[buffer -> MRUPrevious].bufferdesc.MRUNext = buffer -> MRUNext;
-	}
-	
-	buffer -> MRUNext = MRU_NOT_FOUND;
-	buffer -> MRUPrevious = MRU_NOT_FOUND;
-}
+void addtoMRUQueue(volatile BufferDesc *buffer);
+void removefromMRUQueue(volatile BufferDesc *buffer);
 
 /*
  * StrategyGetBuffer
@@ -370,7 +283,9 @@ StrategyGetBuffer(BufferAccessStrategy strategy, uint32 *buf_state)
 		*/
 		if(strategy == NULL){
 			buf = &BufferDescriptors[StrategyControl -> MRUhead];
-		} else {
+		}
+		/*
+		else {
 			buf = &BufferDescriptors[StrategyControl -> nextVictimBuffer];
 		}
 		// handles boundary case where buffer is equal to NBuffers
@@ -378,6 +293,7 @@ StrategyGetBuffer(BufferAccessStrategy strategy, uint32 *buf_state)
 			StrategyControl -> nextVictimBuffer = 0;
 			StrategyControl -> completePasses++;
 		}
+		*/
 
 		/*
 		 * If the buffer is pinned or has a nonzero usage_count, we cannot use

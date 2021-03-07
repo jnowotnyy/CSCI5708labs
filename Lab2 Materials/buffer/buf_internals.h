@@ -24,57 +24,14 @@
 #include "port/atomics.h"
 #include "storage/spin.h"
 #include "utils/relcache.h"
+#include "postgres.h"
+#include "port/atomics.h"
+#include "storage/proc.h"
 
+#define MRU_HEAD -1
+#define MRU_TAIL -1
+#define MRU_NOT_FOUND -2
 
-/*
- * Buffer state is a single 32-bit variable where following data is combined.
- *
- * - 18 bits refcount
- * - 4 bits usage count
- * - 10 bits of flags
- *
- * Combining these values allows to perform some operations without locking
- * the buffer header, by modifying them together with a CAS loop.
- *
- * The definition of buffer state components is below.
- */
-#define BUF_REFCOUNT_ONE 1
-#define BUF_REFCOUNT_MASK ((1U << 18) - 1)
-#define BUF_USAGECOUNT_MASK 0x003C0000U
-#define BUF_USAGECOUNT_ONE (1U << 18)
-#define BUF_USAGECOUNT_SHIFT 18
-#define BUF_FLAG_MASK 0xFFC00000U
-
-/* Get refcount and usagecount from buffer state */
-#define BUF_STATE_GET_REFCOUNT(state) ((state) & BUF_REFCOUNT_MASK)
-#define BUF_STATE_GET_USAGECOUNT(state) (((state) & BUF_USAGECOUNT_MASK) >> BUF_USAGECOUNT_SHIFT)
-
-/*
- * Flags for buffer descriptors
- *
- * Note: TAG_VALID essentially means that there is a buffer hashtable
- * entry associated with the buffer's tag.
- */
-#define BM_LOCKED				(1U << 22)		/* buffer header is locked */
-#define BM_DIRTY				(1U << 23)		/* data needs writing */
-#define BM_VALID				(1U << 24)		/* data is valid */
-#define BM_TAG_VALID			(1U << 25)		/* tag is assigned */
-#define BM_IO_IN_PROGRESS		(1U << 26)		/* read or write in progress */
-#define BM_IO_ERROR				(1U << 27)		/* previous I/O failed */
-#define BM_JUST_DIRTIED			(1U << 28)		/* dirtied since write started */
-#define BM_PIN_COUNT_WAITER		(1U << 29)		/* have waiter for sole pin */
-#define BM_CHECKPOINT_NEEDED	(1U << 30)		/* must write for checkpoint */
-#define BM_PERMANENT			(1U << 31)		/* permanent buffer (not
-												 * unlogged, or init fork) */
-/*
- * The maximum allowed value of usage_count represents a tradeoff between
- * accuracy and speed of the clock-sweep buffer management algorithm.  A
- * large value (comparable to NBuffers) would approximate LRU semantics.
- * But it can take as many as BM_MAX_USAGE_COUNT+1 complete cycles of
- * clock sweeps to find a free buffer, so in practice we don't want the
- * value to be very large.
- */
-#define BM_MAX_USAGE_COUNT	5
 
 /*
  * Buffer tag identifies which disk block the buffer contains.
@@ -95,42 +52,50 @@ typedef struct buftag
 	BlockNumber blockNum;		/* blknum relative to begin of reln */
 } BufferTag;
 
-#define CLEAR_BUFFERTAG(a) \
-( \
-	(a).rnode.spcNode = InvalidOid, \
-	(a).rnode.dbNode = InvalidOid, \
-	(a).rnode.relNode = InvalidOid, \
-	(a).forkNum = InvalidForkNumber, \
-	(a).blockNum = InvalidBlockNumber \
-)
-
-#define INIT_BUFFERTAG(a,xx_rnode,xx_forkNum,xx_blockNum) \
-( \
-	(a).rnode = (xx_rnode), \
-	(a).forkNum = (xx_forkNum), \
-	(a).blockNum = (xx_blockNum) \
-)
-
-#define BUFFERTAGS_EQUAL(a,b) \
-( \
-	RelFileNodeEquals((a).rnode, (b).rnode) && \
-	(a).blockNum == (b).blockNum && \
-	(a).forkNum == (b).forkNum \
-)
 
 /*
- * The shared buffer mapping table is partitioned to reduce contention.
- * To determine which partition lock a given tag requires, compute the tag's
- * hash code with BufTableHashCode(), then apply BufMappingPartitionLock().
- * NB: NUM_BUFFER_PARTITIONS must be a power of 2!
+ * The shared freelist control information.
  */
-#define BufTableHashPartition(hashcode) \
-	((hashcode) % NUM_BUFFER_PARTITIONS)
-#define BufMappingPartitionLock(hashcode) \
-	(&MainLWLockArray[BUFFER_MAPPING_LWLOCK_OFFSET + \
-		BufTableHashPartition(hashcode)].lock)
-#define BufMappingPartitionLockByIndex(i) \
-	(&MainLWLockArray[BUFFER_MAPPING_LWLOCK_OFFSET + (i)].lock)
+typedef struct
+{
+	/* Spinlock: protects the values below */
+	slock_t		buffer_strategy_lock;
+
+	/*
+	 * Clock sweep hand: index of next buffer to consider grabbing. Note that
+	 * this isn't a concrete buffer - we only ever increase the value. So, to
+	 * get an actual buffer, it needs to be used modulo NBuffers.
+	 */
+	pg_atomic_uint32 nextVictimBuffer;
+
+	int			firstFreeBuffer;	/* Head of list of unused buffers */
+	int			lastFreeBuffer; /* Tail of list of unused buffers */
+	
+	int			MRUhead;
+	int			MRUtail;
+	/*
+	 * NOTE: lastFreeBuffer is undefined when firstFreeBuffer is -1 (that is,
+	 * when the list is empty)
+	 */
+
+	/*
+	 * Statistics.  These counters should be wide enough that they can't
+	 * overflow during a single bgwriter cycle.
+	 */
+	uint32		completePasses; /* Complete cycles of the clock sweep */
+	pg_atomic_uint32 numBufferAllocs;	/* Buffers allocated since last reset */
+
+	/*
+	 * Bgworker process to be notified upon activity or -1 if none. See
+	 * StrategyNotifyBgWriter.
+	 */
+	int			bgwprocno;
+} BufferStrategyControl;
+
+
+/* Pointers to shared state */
+static BufferStrategyControl *StrategyControl = NULL;
+
 
 /*
  *	BufferDesc -- shared descriptor/state data for a single shared buffer.
@@ -194,6 +159,7 @@ typedef struct BufferDesc
 	LWLock		content_lock;	/* to lock access to buffer contents */
 } BufferDesc;
 
+
 /*
  * Concurrent access to buffer headers has proven to be more efficient if
  * they're cache line aligned. So we force the start of the BufferDescriptors
@@ -221,6 +187,159 @@ typedef union BufferDescPadded
 	BufferDesc	bufferdesc;
 	char		pad[BUFFERDESC_PAD_TO_SIZE];
 } BufferDescPadded;
+
+BufferDescPadded *BufferDescriptors;
+
+/* CSCI 5708 (Jason Nowotny)
+* This function will put a buffer pointer into MRU queue, It should be called when
+* a buffer is unpinned. The buffer will be put at head position of the linked list since
+* it is MRU. 
+* BufferDescriptors[StrategyControl->MRUtail] is the address of the linked list
+* StrategyControl->MRUhead and StrategyControl->MRUtail records the front and rear of the linked list 
+*/
+void addtoMRUQueue(volatile BufferDesc *buffer){
+	//sanity check if its in the list do not add it again
+	if(buffer -> MRUNext == MRU_NOT_FOUND){
+		return;
+	}
+	
+	//link to next
+	BufferDescriptors[StrategyControl->MRUtail].bufferdesc.MRUNext = buffer -> buf_id;
+	
+	//link to previous
+	if(BufferDescriptors[StrategyControl->MRUhead].bufferdesc.MRUPrevious == MRU_NOT_FOUND){
+		BufferDescriptors[StrategyControl->MRUhead].bufferdesc.MRUPrevious = MRU_HEAD;
+	} else {
+		buffer -> MRUPrevious = StrategyControl -> MRUtail;
+	}
+	
+	StrategyControl -> MRUtail = buffer-> buf_id;
+	buffer -> MRUNext = MRU_TAIL;
+}
+
+
+/* CSCI 5708 (Jason Nowotny)
+* This function will remove a buffer pointer from the MRU linked list if it exists in the queue. 
+* It should be called when a buffer is pinned.
+*/
+
+void removefromMRUQueue(volatile BufferDesc *buffer){
+	//sanity check if its not in the list return
+	if(buffer -> MRUNext == MRU_NOT_FOUND){
+		return;
+	}
+	
+	//unlink from next
+	if(buffer -> MRUNext == MRU_TAIL){
+		StrategyControl -> MRUtail = buffer -> MRUPrevious;
+	} else {
+		BufferDescriptors[buffer -> MRUNext].bufferdesc.MRUPrevious = buffer -> MRUPrevious;
+	}
+	
+	//unlink from previous
+	if (buffer -> MRUPrevious == MRU_HEAD) {
+        StrategyControl -> MRUhead = buffer -> MRUNext;
+	} else {
+    		BufferDescriptors[buffer -> MRUPrevious].bufferdesc.MRUNext = buffer -> MRUNext;
+	}
+	
+	buffer -> MRUNext = MRU_NOT_FOUND;
+	buffer -> MRUPrevious = MRU_NOT_FOUND;
+}
+
+
+/*
+ * Buffer state is a single 32-bit variable where following data is combined.
+ *
+ * - 18 bits refcount
+ * - 4 bits usage count
+ * - 10 bits of flags
+ *
+ * Combining these values allows to perform some operations without locking
+ * the buffer header, by modifying them together with a CAS loop.
+ *
+ * The definition of buffer state components is below.
+ */
+#define BUF_REFCOUNT_ONE 1
+#define BUF_REFCOUNT_MASK ((1U << 18) - 1)
+#define BUF_USAGECOUNT_MASK 0x003C0000U
+#define BUF_USAGECOUNT_ONE (1U << 18)
+#define BUF_USAGECOUNT_SHIFT 18
+#define BUF_FLAG_MASK 0xFFC00000U
+
+/* Get refcount and usagecount from buffer state */
+#define BUF_STATE_GET_REFCOUNT(state) ((state) & BUF_REFCOUNT_MASK)
+#define BUF_STATE_GET_USAGECOUNT(state) (((state) & BUF_USAGECOUNT_MASK) >> BUF_USAGECOUNT_SHIFT)
+
+/*
+ * Flags for buffer descriptors
+ *
+ * Note: TAG_VALID essentially means that there is a buffer hashtable
+ * entry associated with the buffer's tag.
+ */
+#define BM_LOCKED				(1U << 22)		/* buffer header is locked */
+#define BM_DIRTY				(1U << 23)		/* data needs writing */
+#define BM_VALID				(1U << 24)		/* data is valid */
+#define BM_TAG_VALID			(1U << 25)		/* tag is assigned */
+#define BM_IO_IN_PROGRESS		(1U << 26)		/* read or write in progress */
+#define BM_IO_ERROR				(1U << 27)		/* previous I/O failed */
+#define BM_JUST_DIRTIED			(1U << 28)		/* dirtied since write started */
+#define BM_PIN_COUNT_WAITER		(1U << 29)		/* have waiter for sole pin */
+#define BM_CHECKPOINT_NEEDED	(1U << 30)		/* must write for checkpoint */
+#define BM_PERMANENT			(1U << 31)		/* permanent buffer (not
+												 * unlogged, or init fork) */
+/*
+ * The maximum allowed value of usage_count represents a tradeoff between
+ * accuracy and speed of the clock-sweep buffer management algorithm.  A
+ * large value (comparable to NBuffers) would approximate LRU semantics.
+ * But it can take as many as BM_MAX_USAGE_COUNT+1 complete cycles of
+ * clock sweeps to find a free buffer, so in practice we don't want the
+ * value to be very large.
+ */
+#define BM_MAX_USAGE_COUNT	5
+
+
+
+#define CLEAR_BUFFERTAG(a) \
+( \
+	(a).rnode.spcNode = InvalidOid, \
+	(a).rnode.dbNode = InvalidOid, \
+	(a).rnode.relNode = InvalidOid, \
+	(a).forkNum = InvalidForkNumber, \
+	(a).blockNum = InvalidBlockNumber \
+)
+
+#define INIT_BUFFERTAG(a,xx_rnode,xx_forkNum,xx_blockNum) \
+( \
+	(a).rnode = (xx_rnode), \
+	(a).forkNum = (xx_forkNum), \
+	(a).blockNum = (xx_blockNum) \
+)
+
+#define BUFFERTAGS_EQUAL(a,b) \
+( \
+	RelFileNodeEquals((a).rnode, (b).rnode) && \
+	(a).blockNum == (b).blockNum && \
+	(a).forkNum == (b).forkNum \
+)
+
+/*
+ * The shared buffer mapping table is partitioned to reduce contention.
+ * To determine which partition lock a given tag requires, compute the tag's
+ * hash code with BufTableHashCode(), then apply BufMappingPartitionLock().
+ * NB: NUM_BUFFER_PARTITIONS must be a power of 2!
+ */
+#define BufTableHashPartition(hashcode) \
+	((hashcode) % NUM_BUFFER_PARTITIONS)
+#define BufMappingPartitionLock(hashcode) \
+	(&MainLWLockArray[BUFFER_MAPPING_LWLOCK_OFFSET + \
+		BufTableHashPartition(hashcode)].lock)
+#define BufMappingPartitionLockByIndex(i) \
+	(&MainLWLockArray[BUFFER_MAPPING_LWLOCK_OFFSET + (i)].lock)
+
+
+
+
 
 #define GetBufferDescriptor(id) (&BufferDescriptors[(id)].bufferdesc)
 #define GetLocalBufferDescriptor(id) (&LocalBufferDescriptors[(id)])
