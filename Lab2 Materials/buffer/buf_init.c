@@ -16,7 +16,7 @@
 
 #include "storage/bufmgr.h"
 #include "storage/buf_internals.h"
-#include "MRU_NOT_FOUND"
+#define MRU_NOT_FOUND -2
 
 BufferDescPadded *BufferDescriptors;
 char	   *BufferBlocks;
