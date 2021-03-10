@@ -189,7 +189,7 @@ static void AddBufferToRing(BufferAccessStrategy strategy,
 * BufferDescriptors[StrategyControl->MRUtail] is the address of the linked list
 * StrategyControl->MRUhead and StrategyControl->MRUtail records the front and rear of the linked list 
 */
-static void addtoMRUQueue(volatile BufferDesc *buffer){
+void addtoMRUQueue(volatile BufferDesc *buffer){
 	//sanity check if its in the list do not add it again
 	if(buffer -> MRUNext == MRU_NOT_FOUND){
 		return;
@@ -214,7 +214,7 @@ static void addtoMRUQueue(volatile BufferDesc *buffer){
 * It should be called when a buffer is pinned.
 */
 
-static void removefromMRUQueue(volatile BufferDesc *buffer){
+void removefromMRUQueue(volatile BufferDesc *buffer){
 	//sanity check if its not in the list return
 	if(buffer -> MRUNext == MRU_NOT_FOUND){
 		return;
