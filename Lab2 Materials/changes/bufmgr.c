@@ -1660,7 +1660,7 @@ PinBuffer(BufferDesc *buf, BufferAccessStrategy strategy)
 				*print free list for debugging
 				*/
 				removefromMRUQueue(buf);
-				PrintFreeList();
+				//PrintFreeList();
 				break;
 			}
 		}
@@ -1730,7 +1730,7 @@ PinBuffer_Locked(BufferDesc *buf)
 	*print free list for debugging
 	*/
 	removefromMRUQueue(buf);
-	PrintFreeList();
+	//PrintFreeList();
 
 	ResourceOwnerRememberBuffer(CurrentResourceOwner, b);
 }
@@ -1768,7 +1768,7 @@ UnpinBuffer(BufferDesc *buf, bool fixOwner)
 		*print replaced buffer for debugging
 		*/
 		addtoMRUQueue(buf);
-		PrintReplacedBuffer(buf);
+		//PrintReplacedBuffer(buf);
 
 		/* I'd better not still hold any locks on the buffer */
 		Assert(!LWLockHeldByMe(BufferDescriptorGetContentLock(buf)));
