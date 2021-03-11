@@ -243,8 +243,7 @@ void removefromMRUQueue(volatile BufferDesc *buffer){
 */
 
 static void PrintFreeList(){
-	char buffers [1000] = "Candidate Buffers: <";
-	char single_buf[5];
+	printf("Candidate Buffers: <");
 	int first = StrategyControl -> firstFreeBuffer;
 	int last = StrategyControl -> lastFreeBuffer;
 	if(StrategyControl->firstFreeBuffer == FREENEXT_NOT_IN_LIST){
@@ -252,13 +251,14 @@ static void PrintFreeList(){
 		return;
 	}
 	for (int i = first; i <= last; i++){
-		sprintf(single_buf, "%d,", i);
-		strcat(buffers, single_buf);
+		printf("%d ",i);
 	}
-	strcat(buffers, ">\n");
-	printf("%s", buffers);
+	printf(">\n");
 }
 
+static void PrintReplacedBuffer(volatile BufferDesc *buffer){
+	printf("Replaced buffer: <%d>\n", buffer -> lastused);
+}
 /*
  * StrategyGetBuffer
  *
@@ -339,6 +339,8 @@ StrategyGetBuffer(BufferAccessStrategy strategy, uint32 *buf_state)
 	 * buffer_strategy_lock not the individual buffer spinlocks, so it's OK to
 	 * manipulate them without holding the spinlock.
 	 */
+	 PrintFreeList();
+	 	
 	if (StrategyControl->firstFreeBuffer >= 0)
 	{
 		while (true)
@@ -412,6 +414,7 @@ StrategyGetBuffer(BufferAccessStrategy strategy, uint32 *buf_state)
 			* Added the condition where strategy is null (Sanity Check)
 			*/
 			if (strategy == NULL){
+				PrintReplacedBuffer(buf);
 				return buf;
 			} else if (BUF_STATE_GET_USAGECOUNT(local_buf_state) != 0){
 				local_buf_state -= BUF_USAGECOUNT_ONE;
