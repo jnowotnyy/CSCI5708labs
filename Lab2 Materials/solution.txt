@@ -4,33 +4,64 @@ Students:
 
 Brief Summary:
 <A Brief Summary about the change you make (1 Paragraph max)>
-New fields were added to the struct BufferDesc so that we could keep track of the previous and next buffers in the MRU queue linked list along with the buffer's timestamp. New fields were also added to BufferStrategyControl so that we can access the front and end buffers of the MRU queue. These new fields were all initialized in buf_init. Functions were defined to add and remove buffers from the MRU queue. We would remove a buffer from the queue if it was within the queue and pinned. Additionally we would add a buffer to the head of the MRU queue if the buffer was unpinned. If the freelist is empty we use MRU to determine a victim buffer to swap out. The victim buffer is the head of the MRU queue unless all buffers are pinned. Returns the victim if found to the buf_mgr.
+
+New fields were added to the struct BufferDesc so that we could keep track of the previous and next buffers in the MRU queue 
+linked list along with the buffer's timestamp. New fields were also added to BufferStrategyControl so that we can access the 
+front and end buffers of the MRU queue. These new fields were all initialized in buf_init. Functions were defined to add and 
+remove buffers from the MRU queue. We would remove a buffer from the queue if it was within the queue and pinned. Additionally 
+we would add a buffer to the head of the MRU queue if the buffer was unpinned. If the freelist is empty we use MRU to 
+determine a victim buffer to swap out. The victim buffer is the head of the MRU queue unless all buffers are pinned. Returns 
+the victim if found to the buf_mgr.
 
 Detailed Changes:
 1. <buf_init.c>: </backend/storage/buffer>
 	- <Detailed changes of the file>.
+	
 	Line 19 defines MRU_NOT_FOUND for initialization.
+	
 	In lines 142-144, new BufferDesc fields MRUPrevious, MRUNext, and lastused are intialized.
+	
 	At line 172, print candidate buffers after initialization.
+	
 	
 2. <bufmgr.c>: </backend/storage/buffer>
 	- <Detailed changes of the file>.
+	
 	In line 1662, added call to removefromMRUQueue. This line removes the buffer from the MRU queue whenever a buffer is pinned.
-	As previously stated, in line 1732 there is a call to removeFromMRUQueue. This updates the MRU Queue whenever a buffer is pinned and locked.
+	
+	In line 1732 there is a call to removeFromMRUQueue. This updates the MRU Queue whenever a buffer is pinned and locked.
+	
 	In line 1770 there is a call to addtoMRUQueue. This call adds the buffer to the MRU queue whenever a buffer is unpinned.	
+
 
 3. <freelist.c>: </backend/storage/buffer>
 	- <Detailed changes of the file>.
+	
 	Lines 26-28 define MRU_HEAD, MRU_TAIL, and MRU_NOT_FOUND for the purpose of checking the boundaries of the MRU queue.
+	
 	Line 32 declares a global timestamp variable to keep track of time for replacements.
-	Lines 52-54 adds three new fields to the struct BufferStrategyControl. They are place holder for the front and back of the MRU queue, named MRUhead and MRUtail. Additionally lastused is added to keep track of the timestamp the struct was last used.
-	Lines 192-209 are a function definition for addtoMRUQueue. This function is called when a buffer is unpinned and adds this buffer to the head of the MRUQueue linked list.
-	Lines 217-238 are a function definition for removefromMRUQueue. This function is called when a buffer is pinned and removes this buffer from the MRUQueue linked list if it exists.
+	
+	Lines 52-54 adds three new fields to the struct BufferStrategyControl. They are place holder for the front and back of the MRU queue,
+	named MRUhead and MRUtail. Additionally lastused is added to keep track of the timestamp the struct was last used.
+	
+	Lines 192-209 are a function definition for addtoMRUQueue. This function is called when a buffer is unpinned and adds this buffer to 
+	the head of the MRUQueue linked list.
+	
+	Lines 217-238 are a function definition for removefromMRUQueue. This function is called when a buffer is pinned and removes this buffer
+	 from the MRUQueue linked list if it exists.
+	
 	Lines 397-398 sets buf to the victim buf which is the head of the MRU queue linked list.
+	
 	Lines 414-415 returns the buffer. This means the buffer is the first buffer in the MRU queue that is not pinned (refcount = 0)
+	
 	Line 442 is a call to removefromMRUQueue. This is only called if the for loop reaches the end of the MRU queue without finding an unpinned buffer.
+
 
 4. <buf_internals.h>: </include/storage>
 	- <Detailed changes of the file>.
-	Lines 192-195 add the new fields MRUPrevious, MRUNext, and lastused to the BufferDesc struct. MRUPrevious and MRUNext refers to the previous and next buffers in the MRU queue. lastused is a timestamp for buffer.
-	Lines 332-333 declare the functions addtoMRUQueue and removefromMRUQueue with the keyword extern. Allows the function call to be used in both freelist and bufmgr.
+	
+	Lines 192-195 add the new fields MRUPrevious, MRUNext, and lastused to the BufferDesc struct. MRUPrevious and MRUNext refers to the previous 
+	and next buffers in the MRU queue. lastused is a timestamp for buffer.
+	
+	Lines 332-333 declare the functions addtoMRUQueue and removefromMRUQueue with the keyword extern. Allows the function call to be used in both 
+	freelist and bufmgr.
