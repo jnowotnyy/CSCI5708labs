@@ -414,7 +414,6 @@ StrategyGetBuffer(BufferAccessStrategy strategy, uint32 *buf_state)
 			* Added the condition where strategy is null (Sanity Check)
 			*/
 			if (strategy == NULL){
-				PrintReplacedBuffer(buf);
 				return buf;
 			} else if (BUF_STATE_GET_USAGECOUNT(local_buf_state) != 0){
 				local_buf_state -= BUF_USAGECOUNT_ONE;

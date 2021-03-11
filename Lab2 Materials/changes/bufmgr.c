@@ -1108,6 +1108,7 @@ BufferAlloc(SMgrRelation smgr, char relpersistence, ForkNumber forkNum,
 		 * spinlock still held!
 		 */
 		buf = StrategyGetBuffer(strategy, &buf_state);
+		PrintReplacedBuffer(buf);
 
 		Assert(BUF_STATE_GET_REFCOUNT(buf_state) == 0);
 
