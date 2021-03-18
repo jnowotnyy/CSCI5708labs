@@ -1,0 +1,13 @@
+Students:
+1. <Jason Nowotny> (<nowot005>)
+2. <Henry Sotsaikich> (<sotsa001>)
+
+Brief Summary:
+<A Brief Summary about the change you make (1 Paragraph max)>
+
+Detailed Changes:
+1.  <Modified File 1>: <The path of the modified file from src directory>
+    - <Detailed changes of the file>.
+    For example: In line xxx, I make a change so that the buffer will do.......
+    
+2.  <Modified File 2>: <Path from src>- <Detailed changes of the file>.
