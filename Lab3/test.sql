@@ -2,12 +2,12 @@ drop table test;
 
 CREATE TABLE test(
 	num int,
-	let varchar(1);
+	letter varchar(1),
 	PRIMARY KEY (num)
 );
 
 Insert into test
-(num)
+(num,letter)
 Values
  (1,'a'), (2,'b'), (3,'c'), (4,'d'), (5,'e'), (6,'f'), (7,'g'), (8,'h'), (9,'i'),(10,'j'),
 (11,'a'),(12,'b'),(13,'c'),(14,'d'),(15,'e'),(16,'f'),(17,'g'),(18,'h'),(19,'i'),(20,'j'),
@@ -25,11 +25,27 @@ FROM test limit 10;
 
 
 SELECT *
-FROM test offset 10;
+FROM test offset 35;
 
 
 SELECT *
 FROM test offset 10 limit 10;
+
+
+SELECT *
+FROM test order by "letter" offset 15 limit 25;
+
+
+SELECT *
+FROM test limit 0;
+
+
+SELECT *
+FROM test limit All;
+
+
+SELECT *
+FROM test offset 0;
 
 
 
