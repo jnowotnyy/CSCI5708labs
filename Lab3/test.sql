@@ -15,14 +15,14 @@ Values
 (31,'a'),(32,'b'),(33,'c'),(34,'d'),(35,'e'),(36,'f'),(37,'g'),(38,'h'),(39,'i'),(40,'j'),
 (41,'a'),(42,'b'),(43,'c'),(44,'d'),(45,'e'),(46,'f'),(47,'g'),(48,'h'),(49,'i'),(50,'j');
 
-
+/*
 SELECT count(*)
 FROM test;
 
 
 SELECT *
 FROM test limit 10;
-
+*/
 
 SELECT *
 FROM test offset 35;
@@ -32,6 +32,7 @@ SELECT *
 FROM test offset 10 limit 10;
 
 
+/*
 SELECT *
 FROM test order by "letter" offset 15 limit 25;
 
@@ -46,7 +47,7 @@ FROM test limit All;
 
 SELECT *
 FROM test offset 0;
-
+*/
 
 
 

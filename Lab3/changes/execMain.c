@@ -318,7 +318,7 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 	 */
 	operation = queryDesc->operation;
 	dest = queryDesc->dest;
-
+	printf("\nrun: %d",operation);
 	/*
 	 * startup tuple receiver, if we will be emitting tuples
 	 */
@@ -1528,7 +1528,7 @@ ExecutePlan(EState *estate,
 {
 	TupleTableSlot *slot;
 	uint64		current_tuple_count;
-
+	
 	/*
 	 * initialize local variables
 	 */
@@ -1555,6 +1555,10 @@ ExecutePlan(EState *estate,
 	/*
 	 * Loop until we've processed the proper number of tuples from the plan.
 	 */
+	
+	printf("\nexecute: %d",numberTuples);
+	printf("\nestate: %s",estate->es_param_list_info);
+	printf("\ntype: %d",estate->type);
 	for (;;)
 	{
 		/* Reset the per-output-tuple exprcontext */
