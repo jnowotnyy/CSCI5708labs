@@ -23,13 +23,13 @@ FROM test;
 SELECT *
 FROM test limit 10;
 */
-
+/*
 SELECT *
 FROM test offset 35;
-
+*/
 
 SELECT *
-FROM test offset 10 limit 10;
+FROM test offset 4 limit 20;
 
 
 /*
