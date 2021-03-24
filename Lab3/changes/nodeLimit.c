@@ -56,7 +56,7 @@ ExecLimit(LimitState *node)
 	switch (node->lstate)
 	{
 		case LIMIT_INITIAL:
-
+			printf("\n1");
 			/*
 			 * First call for this node, so compute limit/offset. (We can't do
 			 * this any earlier, because parameters from upper nodes will not
@@ -68,7 +68,7 @@ ExecLimit(LimitState *node)
 			/* FALL THRU */
 
 		case LIMIT_RESCAN:
-
+			printf("\n2");
 			/*
 			 * If backwards scan, just return NULL without changing state.
 			 */
@@ -89,6 +89,7 @@ ExecLimit(LimitState *node)
 			 */
 			for (;;)
 			{
+				
 				slot = ExecProcNode(outerPlan);
 				if (TupIsNull(slot))
 				{
@@ -100,8 +101,14 @@ ExecLimit(LimitState *node)
 					return NULL;
 				}
 				node->subSlot = slot;
-				if (++node->position <= node->offset)
-					break;
+				if(node->limitOffset){
+					if (++node->position <= node->offset)
+						break;
+				}else{
+					if (++node->position > node->offset)
+						printf("\nhere");
+						break;
+				}
 			}
 
 			/*
@@ -111,7 +118,7 @@ ExecLimit(LimitState *node)
 			break;
 
 		case LIMIT_EMPTY:
-
+			printf("\n3");
 			/*
 			 * The subplan is known to return no tuples (or not more than
 			 * OFFSET tuples, in general).  So we return no tuples.
@@ -119,6 +126,7 @@ ExecLimit(LimitState *node)
 			return NULL;
 
 		case LIMIT_INWINDOW:
+			printf("\n4");
 			if (ScanDirectionIsForward(direction))
 			{
 				/*
@@ -127,21 +135,31 @@ ExecLimit(LimitState *node)
 				 * advancing the subplan or the position variable; but change
 				 * the state machine state to record having done so.
 				 */
+				
+				 
 				int max = 0;
-				if(node->count % node->offset == 0){
-					max = node->count + (((node->count / node->offset) - 1) * node->offset);
+				if(node->limitOffset){
+					if(node->count % node->offset == 0){
+						max = node->count + (((node->count / node->offset) - 1) * node->offset);
+					}else{
+						max = node->count + ((node->count / node->offset) * node->offset);
+					}
+					printf("\n max: %d",max);
+					if (!node->noCount &&
+						node->position >= max)
+					{
+						printf("\n here break");
+						node->lstate = LIMIT_WINDOWEND;
+						return NULL;
+					}
 				}else{
-					max = node->count + ((node->count / node->offset) * node->offset);
+					if (!node->noCount &&
+						node->position - node->offset >= node->count)
+					{
+						node->lstate = LIMIT_WINDOWEND;
+						return NULL;
+					}
 				}
-				printf("\n max: %d",max);
-				if (!node->noCount &&
-					node->position >= max)
-				{
-					printf("\n here break");
-					node->lstate = LIMIT_WINDOWEND;
-					return NULL;
-				}
-
 				/*
 				 * Get next tuple from subplan, if any.
 				 */
@@ -157,14 +175,14 @@ ExecLimit(LimitState *node)
 				}
 				node->subSlot = slot;
 				node->position++;
-
-				if(node->position % node->offset ==1){
-					if( (((node->position + (node->offset - 1)) / node->offset) % 2 == 0) ){
-						printf("\nNodePos: %d",node->position);
-						skip = true;
+				if(node->limitOffset){
+					if(node->position % node->offset ==1){
+						if( (((node->position + (node->offset - 1)) / node->offset) % 2 == 0) ){
+							printf("\nNodePos: %d",node->position);
+							skip = true;
+						}
 					}
 				}
-				
 			}
 			else
 			{
@@ -192,6 +210,7 @@ ExecLimit(LimitState *node)
 			break;
 
 		case LIMIT_SUBPLANEOF:
+			printf("\n5");
 			if (ScanDirectionIsForward(direction))
 				return NULL;
 
@@ -208,6 +227,7 @@ ExecLimit(LimitState *node)
 			break;
 
 		case LIMIT_WINDOWEND:
+			printf("\n6");
 			if (ScanDirectionIsForward(direction))
 				return NULL;
 
@@ -221,6 +241,7 @@ ExecLimit(LimitState *node)
 			break;
 
 		case LIMIT_WINDOWSTART:
+			printf("\n7");
 			if (!ScanDirectionIsForward(direction))
 				return NULL;
 
@@ -244,13 +265,14 @@ ExecLimit(LimitState *node)
 	Assert(!TupIsNull(slot));
 	printf("\nposition: %ld",node->position);
 	printf("\noffset: %ld",node->offset);
-	if(skip){
-		for(int x=0; x< 4; x++){
-			slot = ExecProcNode(outerPlan);
-			node->subSlot=slot;
-			node->position++;
+	if(node->limitOffset)	
+		if(skip){
+			for(int x=0; x< node->offset; x++){
+				slot = ExecProcNode(outerPlan);
+				node->subSlot=slot;
+				node->position++;
+			}
 		}
-	}
 	printf("\n2nd position: %ld",node->position);
 	printf("\n2nd offset: %ld",node->offset);
 	return slot;
@@ -329,7 +351,6 @@ recompute_limits(LimitState *node)
 
 	/* Set state-machine state */
 	node->lstate = LIMIT_RESCAN;
-
 	//Notify child nodes about the offset if useful
 	//pass this for every time recomupte_limits is called
 	//passOldBound(node, outerPlanState(node));

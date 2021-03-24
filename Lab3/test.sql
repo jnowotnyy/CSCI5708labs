@@ -22,17 +22,17 @@ FROM test;
 
 SELECT *
 FROM test limit 10;
-*/
-/*
+
+
 SELECT *
-FROM test offset 35;
+FROM test offset 15;
 */
 
 SELECT *
 FROM test offset 4 limit 20;
 
-
 /*
+
 SELECT *
 FROM test order by "letter" offset 15 limit 25;
 
