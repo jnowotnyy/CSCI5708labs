@@ -18,19 +18,19 @@ Values
 /*
 SELECT count(*)
 FROM test;
-
+*/
 
 SELECT *
 FROM test limit 10;
 
-*/
-SELECT *
-FROM test offset 15;
 
-/*
+SELECT *
+FROM test offset 12;
+
+
 SELECT *
 FROM test offset 4 limit 20;
-
+/*
 
 
 SELECT *

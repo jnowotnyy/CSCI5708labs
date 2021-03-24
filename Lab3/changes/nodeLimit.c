@@ -26,7 +26,7 @@
 #include "nodes/nodeFuncs.h"
 
 static void recompute_limits(LimitState *node);
-static void passOldBound(LimitState *limitNode, PlanState *planNode);
+
 
 
 /* ----------------------------------------------------------------
@@ -56,7 +56,7 @@ ExecLimit(LimitState *node)
 	switch (node->lstate)
 	{
 		case LIMIT_INITIAL:
-			printf("\n1");
+
 			/*
 			 * First call for this node, so compute limit/offset. (We can't do
 			 * this any earlier, because parameters from upper nodes will not
@@ -68,7 +68,7 @@ ExecLimit(LimitState *node)
 			/* FALL THRU */
 
 		case LIMIT_RESCAN:
-			printf("\n2");
+
 			/*
 			 * If backwards scan, just return NULL without changing state.
 			 */
@@ -106,7 +106,7 @@ ExecLimit(LimitState *node)
 						break;
 				}else{
 					if (++node->position > node->offset)
-						printf("\nhere");
+
 						break;
 				}
 			}
@@ -118,7 +118,7 @@ ExecLimit(LimitState *node)
 			break;
 
 		case LIMIT_EMPTY:
-			printf("\n3");
+
 			/*
 			 * The subplan is known to return no tuples (or not more than
 			 * OFFSET tuples, in general).  So we return no tuples.
@@ -126,7 +126,7 @@ ExecLimit(LimitState *node)
 			return NULL;
 
 		case LIMIT_INWINDOW:
-			printf("\n4");
+
 			if (ScanDirectionIsForward(direction))
 			{
 				/*
@@ -144,11 +144,11 @@ ExecLimit(LimitState *node)
 					}else{
 						max = node->count + ((node->count / node->offset) * node->offset);
 					}
-					printf("\n max: %d",max);
+					//printf("\nmax: %d",max);
 					if (!node->noCount &&
 						node->position >= max)
 					{
-						printf("\n here break");
+						//printf("\nhere break");
 						node->lstate = LIMIT_WINDOWEND;
 						return NULL;
 					}
@@ -178,7 +178,7 @@ ExecLimit(LimitState *node)
 				if(node->limitOffset){
 					if(node->position % node->offset ==1){
 						if( (((node->position + (node->offset - 1)) / node->offset) % 2 == 0) ){
-							printf("\nNodePos: %d",node->position);
+
 							skip = true;
 						}
 					}
@@ -210,7 +210,7 @@ ExecLimit(LimitState *node)
 			break;
 
 		case LIMIT_SUBPLANEOF:
-			printf("\n5");
+
 			if (ScanDirectionIsForward(direction))
 				return NULL;
 
@@ -227,7 +227,7 @@ ExecLimit(LimitState *node)
 			break;
 
 		case LIMIT_WINDOWEND:
-			printf("\n6");
+
 			if (ScanDirectionIsForward(direction))
 				return NULL;
 
@@ -241,7 +241,7 @@ ExecLimit(LimitState *node)
 			break;
 
 		case LIMIT_WINDOWSTART:
-			printf("\n7");
+
 			if (!ScanDirectionIsForward(direction))
 				return NULL;
 
@@ -263,18 +263,21 @@ ExecLimit(LimitState *node)
 
 	/* Return the current tuple */
 	Assert(!TupIsNull(slot));
-	printf("\nposition: %ld",node->position);
-	printf("\noffset: %ld",node->offset);
+	//printf("\nposition: %ld",node->position);
+	//printf("\noffset: %ld",node->offset);
 	if(node->limitOffset)	
 		if(skip){
 			for(int x=0; x< node->offset; x++){
 				slot = ExecProcNode(outerPlan);
+				if(TupIsNull(slot)){
+					return NULL;
+				}
 				node->subSlot=slot;
 				node->position++;
 			}
 		}
-	printf("\n2nd position: %ld",node->position);
-	printf("\n2nd offset: %ld",node->offset);
+	//printf("\n2nd position: %ld",node->position);
+	//printf("\n2nd offset: %ld",node->offset);
 	return slot;
 }
 
@@ -353,7 +356,7 @@ recompute_limits(LimitState *node)
 	node->lstate = LIMIT_RESCAN;
 	//Notify child nodes about the offset if useful
 	//pass this for every time recomupte_limits is called
-	//passOldBound(node, outerPlanState(node));
+
 }
 
 //our passbound function
@@ -366,38 +369,7 @@ recompute_limits(LimitState *node)
  *  @param limitNode The current limit state of the node.
  *  @param planNode The current plan state of the node.
  */
-static void passOldBound(LimitState *limitNode, PlanState *planNode){
-	// SortState
-	if (planNode->type == 92){
-		SortState  *state = (SortState *) planNode;
-		int64		tuples_needed = limitNode->count + limitNode->offset;
 
-		//sanity check that fields are filled
-		if (limitNode->noCount || tuples_needed < 0)
-		{
-			state->bounded = false;
-		}
-		else
-		{
-			state->bounded = true;
-			state->bound = tuples_needed;
-		}
-	}
-	// MergeAppendState
-	else if (planNode->type == 65){
-		MergeAppendState *mergeState = (MergeAppendState *) planNode;
-
-		for (int i = 0; i < mergeState->ms_nplans; i++){
-			passOldBound(limitNode, mergeState->mergeplans[i]);
-		}
-	}
-	// ResultState
-	else if (planNode->type == 61){
-		if (outerPlanState(planNode) && !expression_returns_set((Node *) planNode->plan->targetlist)){
-			passOldBound(limitNode, outerPlanState(planNode));
-		}
-	}
-}
 
 /* ----------------------------------------------------------------
  *		ExecInitLimit
