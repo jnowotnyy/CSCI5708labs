@@ -15,8 +15,8 @@ WHERE S.age < 30;
 
 
 /*
-Query 1 Time: 48.787 ms
-Query 2 Time: 128.46 ms
+Query 1 Time: 55.755 ms
+Query 2 Time: 113.744 ms
 */
 
 -- QUESTION 2 --
@@ -32,8 +32,8 @@ GROUP BY sid
 HAVING year = 4;
 
 /*
-Query 1 Time: 65.558 ms
-Query 2 Time: 63.611 ms
+Query 1 Time: 68.940 ms
+Query 2 Time: 70.870 ms
 */
 
 -- QUESTION 3 --
@@ -46,13 +46,15 @@ GROUP BY dname;
 
 --Simple Join
 SELECT dname
-FROM major, student
-WHERE major.sid = student.sid AND student.age < 30
+FROM major
+JOIN Student
+    ON major.sid = student.sid 
+WHERE student.age < 30
 GROUP BY dname;
 
 /*
-Query 1 Time: 627.327 ms
-Query 2 Time: 401.739 ms
+Query 1 Time: 402.982 ms
+Query 2 Time: 428.397 ms
 */
 
 \timing
