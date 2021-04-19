@@ -1,0 +1,26 @@
+1. <Jason Nowotny> (<nowot005>)
+2. <Henry Sotsaikich> (<sotsa001>)
+
+Brief Summary:
+	The objective for this lab was to change the functionality of the offset
+operator in PostgreSQL to offset k tuples, then allow k tuples (etc.) until 
+the number of tuples is insufficient to continue the cycle.  This is accomplished
+through a helper function called passOldBound() which takes in a LimitState and 
+a PlanState as its parameters.  It was determined via looking at PostgresSQL source
+code that the PlanNode states that need to be altered are SortState,
+MergeAppendState, and ResultState.  In this situation the bounds of the offset
+function are passed down to child PlanNodes.  This way the algorithm described
+can be recursively applied.  All changes are located within the NodeLimit.c file
+as described below.
+
+Detailed Changes:
+1.  <NodeLimit.c>: <src/backend/executor/NodeLimit.c>
+    -> In line 29, a change was made so that there is a function prototype for the
+    helper function passOldBound().
+    
+    -> In line 300, a change was made to call the function passOldBound whenever
+    recompute_limits() is called.
+    
+    -> In lines 313-341, this will pass the bound information to child
+    nodes when they are in SortState, MergeAppendState, or ResultState. This
+    function takes in a Limitstate and a PlanState.

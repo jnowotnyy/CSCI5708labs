@@ -4,4 +4,4 @@ CREATE TABLE student (sid serial, PRIMARY KEY (sid), sname text not null, sex te
 
 set client_encoding = LATIN1;
 
-COPY student(sname,sex,age,year,gpa) from '<PATH_TO_DAT_FILE>/student.dat' DELIMITERS ';';
+COPY student(sname,sex,age,year,gpa) from '/home/nowot005/CSCI5708labs/Lab4/data_set/student.dat' DELIMITERS ';';

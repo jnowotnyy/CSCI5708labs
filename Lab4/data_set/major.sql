@@ -4,4 +4,4 @@ CREATE TABLE major (dname text not null, sid int not null, PRIMARY KEY (dname, s
 
 set client_encoding = LATIN1;
 
-COPY major(dname,sid) from '<PATH_TO_DAT_FILE>/major.dat' DELIMITERS ';';
+COPY major(dname,sid) from '/home/nowot005/CSCI5708labs/Lab4/data_set/major.dat' DELIMITERS ';';

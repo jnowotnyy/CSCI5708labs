@@ -4,4 +4,4 @@ CREATE TABLE department (dname text not null, PRIMARY KEY (dname), numphds int n
 
 set client_encoding = LATIN1;
 
-COPY department(dname,numphds) from '<PATH_TO_DAT_FILE>/department.dat' DELIMITERS ';';
+COPY department(dname,numphds) from '/home/nowot005/CSCI5708labs/Lab4/data_set/department.dat' DELIMITERS ';';

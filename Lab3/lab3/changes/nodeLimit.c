@@ -311,8 +311,8 @@ recompute_limits(LimitState *node)
  *  @param planNode The current plan state of the node.
  */
 static void passOldBound(LimitState *limitNode, PlanState *planNode){
-	if (planNode->type == SortState){
-		SortState  *state = (SortState *) child_node;
+	if (IsA(planNode, SortState)){
+		SortState  *state = (SortState *) planNode;
 		int64		tuples_needed = limitNode->count + limitNode->offset;
 
 		//sanity check that fields are filled
@@ -326,14 +326,14 @@ static void passOldBound(LimitState *limitNode, PlanState *planNode){
 			state->bound = tuples_needed;
 		}
 	}
-	else if (planNode->type == MergeAppendState){
-		MergeAppendState *mergeState = (MergeAppendState *) child_node;
+	else if (IsA(planNode, MergeAppendState)){
+		MergeAppendState *mergeState = (MergeAppendState *) planNode;
 
 		for (int i = 0; i < mergeState->ms_nplans; i++){
-			passOldBound(node, mergeState->mergeplans[i]);
+			passOldBound(limitNode, mergeState->mergeplans[i]);
 		}
 	}
-	else if (planNode->type == ResultState){
+	else if (IsA(planNode, ResultState)){
 		if (outerPlanState(planNode) && !expression_returns_set((Node *) planNode->plan->targetlist)){
 			passOldBound(limitNode, outerPlanState(planNode));
 		}
