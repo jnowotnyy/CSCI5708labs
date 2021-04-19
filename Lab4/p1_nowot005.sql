@@ -29,7 +29,7 @@ WHERE S.age > 25;
 
 SELECT S.sname
 FROM Student S
-WHERE S.age >20;
+WHERE S.age > 20;
 
 
 /*
