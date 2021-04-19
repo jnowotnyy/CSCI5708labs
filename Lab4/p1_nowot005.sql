@@ -15,8 +15,8 @@ WHERE S.age > 20;
 
 
 /*
-Query 1 Time: 105.935 ms
-Query 2 Time: 129.885 ms
+Query 1 Time: 121.579 ms
+Query 2 Time: 129.184 ms
 */
 
 -- QUESTION 2 --
@@ -33,8 +33,8 @@ WHERE S.age >20;
 
 
 /*
-Query 1 Time: 94.639 ms
-Query 2 Time: 108.645 ms
+Query 1 Time: 117.347 ms
+Query 2 Time: 118.445 ms
 */
 
 -- QUESTION 3 --
@@ -49,8 +49,8 @@ SELECT S.sname
 FROM Student S
 WHERE S.age >20;
 /*
-Query 1 Time: 94.639 ms
-Query 2 Time: 108.645 ms
+Query 1 Time: 127.907 ms
+Query 2 Time: 142.960 ms
 */
 
 -- QUESTION 4 --
@@ -65,8 +65,8 @@ SELECT S.sname
 FROM Student S
 WHERE S.age >20;
 /*
-Query 1 Time: 94.639 ms
-Query 2 Time: 108.645 ms
+Query 1 Time: 126.976 ms
+Query 2 Time: 145.595 ms
 */
 \timing
 -- QUESTION 5 --
