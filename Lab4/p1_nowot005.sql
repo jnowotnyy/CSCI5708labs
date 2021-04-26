@@ -14,9 +14,6 @@ FROM Student S
 WHERE S.age = 20;
 
 /*
-Query 1 Time: 121.579 ms
-Query 2 Time: 129.184 ms
-
 Query 1 Time: 74.055 ms
 Query 2 Time: 25.518 ms
 */
@@ -43,9 +40,6 @@ FROM Student S
 WHERE S.age = 20;
 
 /*
-Query 1 Time: 117.347 ms
-Query 2 Time: 118.445 ms
-
 Query 1 Time: 72.505 ms
 Query 2 Time: 5.562 ms
 */
@@ -73,9 +67,6 @@ FROM Student S
 WHERE S.age = 20;
 
 /*
-Query 1 Time: 127.907 ms
-Query 2 Time: 142.960 ms
-
 Query 1 Time: 79.186 ms
 Query 2 Time: 5.856 ms
 */
@@ -104,9 +95,6 @@ FROM Student S
 WHERE S.age = 20;
 
 /*
-Query 1 Time: 126.976 ms
-Query 2 Time: 145.595 ms
-
 Query 1 Time: 73.800 ms
 Query 2 Time: 5.805 ms
 */
