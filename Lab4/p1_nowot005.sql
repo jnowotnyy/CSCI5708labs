@@ -1,6 +1,3 @@
-\i /home/sotsa001/Desktop/CSCI5708labs/Lab4/data_set/department.sql
-\i /home/sotsa001/Desktop/CSCI5708labs/Lab4/data_set/major.sql
-\i /home/sotsa001/Desktop/CSCI5708labs/Lab4/data_set/student.sql
 \timing
 
 -- QUESTION 1 --
